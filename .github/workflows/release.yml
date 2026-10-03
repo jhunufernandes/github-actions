@@ -1,8 +1,38 @@
 name: release
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      release_version:
+        description: Release version to tag and release (without leading v)
+        required: true
+        type: string
 jobs:
-  call-release:
-    uses: jhunufernandes/python-github-actions/.github/workflows/release.yml@main
+  create-tag:
+    if: github.event.head_commit.message != 'Automated tag'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          git config --global user.name github-actions[bot]
+          git config --global user.email 41898282+github-actions[bot]@users.noreply.github.com
+          # plain `git push` never sends tags — push the ref explicitly
+          git tag --force "v${{ inputs.release_version }}"
+          git push origin "v${{ inputs.release_version }}" --force
+        id: tag-id
+  create-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: softprops/action-gh-release@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ inputs.release_version }}
+          name: Release ${{ inputs.release_version }}
+          body: ${{ github.event.head_commit.message }}
+          draft: false
+          prerelease: false
